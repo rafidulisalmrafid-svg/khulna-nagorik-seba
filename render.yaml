@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: khulna-seba
+    name: khulna-nagorik-seba
     runtime: docker
     plan: free
     region: singapore
@@ -9,7 +9,7 @@ services:
     healthCheckPath: /up
     envVars:
       - key: APP_NAME
-        value: "খুলনা সেবা"
+        value: "খুলনা নাগরিক সেবা"
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
@@ -45,4 +45,4 @@ services:
       - key: MAIL_FROM_ADDRESS
         value: rafidul.labar.bd@gmail.com
       - key: MAIL_FROM_NAME
-        value: "খুলনা সেবা"
+        value: "খুলনা নাগরিক সেবা"
