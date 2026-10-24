@@ -44,5 +44,11 @@ services:
         value: tls
       - key: MAIL_FROM_ADDRESS
         value: rafidul.labar.bd@gmail.com
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        value: rafidul.isalm.rafid@gmail.com
+      - key: BREVO_SENDER_NAME
+        value: 'Khulna Nagorik Seba'
       - key: MAIL_FROM_NAME
         value: "খুলনা নাগরিক সেবা"

@@ -26,8 +26,54 @@ class EmailNotificationService
 
         $fromAddress = config('mail.from.address', 'rafidul.labar.bd@gmail.com');
         $fromName = config('mail.from.name', 'খুলনা সেবা');
+        $brevoApiKey = config('services.brevo.key') ?: env('BREVO_API_KEY', '');
 
-        // 1. First Attempt: Standard Laravel Mailer
+        // 1. First & Primary Attempt: Brevo HTTPS REST API (Port 443 - Bypasses Render & cloud SMTP port blocks)
+        if (!empty($brevoApiKey)) {
+            try {
+                $brevoPayload = [
+                    'sender' => [
+                        'name' => $fromName,
+                        'email' => $fromAddress,
+                    ],
+                    'to' => [
+                        [
+                            'email' => $toEmail,
+                            'name' => 'নাগরিক',
+                        ]
+                    ],
+                    'subject' => $subject,
+                    'htmlContent' => $htmlContent,
+                ];
+
+                $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($brevoPayload));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'accept: application/json',
+                    'api-key: ' . $brevoApiKey,
+                    'content-type: application/json',
+                ]);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode >= 200 && $httpCode < 300) {
+                    Log::info("Email successfully sent via Brevo HTTPS API (Port 443) to: {$toEmail}");
+                    return true;
+                } else {
+                    Log::warning("Brevo HTTPS API returned HTTP {$httpCode} for {$toEmail}: {$response} - Falling back to SMTP...");
+                }
+            } catch (\Throwable $brevoEx) {
+                Log::warning("Brevo HTTPS API exception for {$toEmail}: " . $brevoEx->getMessage() . " - Falling back to SMTP...");
+            }
+        }
+
+        // 2. Second Attempt (Fallback): Standard Laravel Mailer (SMTP)
         try {
             Mail::html($htmlContent, function ($message) use ($toEmail, $subject, $fromAddress, $fromName) {
                 $message->to($toEmail)
@@ -40,7 +86,7 @@ class EmailNotificationService
             Log::warning("Laravel Mailer failed for {$toEmail}: " . $e1->getMessage() . " - Falling back to direct Symfony SMTP...");
         }
 
-        // 2. Second Attempt: Direct Symfony Mailer on Port 587 (TLS)
+        // 3. Third Attempt (Fallback): Direct Symfony Mailer on Port 587 (TLS)
         try {
             $dsn587 = 'smtp://rafidul.labar.bd%40gmail.com:cwiigttcebziaoig@smtp.gmail.com:587';
             $transport587 = Transport::fromDsn($dsn587);
@@ -57,7 +103,7 @@ class EmailNotificationService
             Log::warning("Symfony SMTP 587 failed for {$toEmail}: " . $e2->getMessage() . " - Falling back to SMTPS 465...");
         }
 
-        // 3. Third Attempt: Direct Symfony Mailer on Port 465 (SSL)
+        // 4. Fourth Attempt (Fallback): Direct Symfony Mailer on Port 465 (SSL)
         try {
             $dsn465 = 'smtps://rafidul.labar.bd%40gmail.com:cwiigttcebziaoig@smtp.gmail.com:465';
             $transport465 = Transport::fromDsn($dsn465);
@@ -71,7 +117,7 @@ class EmailNotificationService
             Log::info("Email successfully sent via direct Symfony SMTPS (Port 465) to: {$toEmail}");
             return true;
         } catch (\Throwable $e3) {
-            Log::error("All SMTP attempts failed for {$toEmail}: 587 Error: " . $e2->getMessage() . " | 465 Error: " . $e3->getMessage());
+            Log::error("All Email delivery attempts failed for {$toEmail}");
             return false;
         }
     }
