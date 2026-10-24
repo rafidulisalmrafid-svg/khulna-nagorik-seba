@@ -104,8 +104,10 @@ export default function Register({ initialPhone = '', redirect = '' }) {
         } else if (cleanNid.length < 10 || cleanNid.length > 17) {
             newErrors.nid = 'NID নম্বর ১০ থেকে ১৭ ডিজিটের হতে হবে।';
         }
-        if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-            newErrors.email = 'সঠিক ইমেইল ঠিকানা প্রদান করুন।';
+        if (!formData.email || !formData.email.trim()) {
+            newErrors.email = 'ইমেইল ঠিকানা দেওয়া বাধ্যতামূলক (ওটিপি ও লাইসেন্স আপডেটের জন্য)।';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+            newErrors.email = 'সঠিক ইমেইল ঠিকানা প্রদান করুন (যেমন: name@example.com)।';
         }
 
         setErrors(newErrors);

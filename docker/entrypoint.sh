@@ -20,6 +20,14 @@ sed -i "s|^APP_KEY=.*|APP_KEY=$APP_KEY|" /var/www/html/.env
 sed -i "s|^APP_ENV=.*|APP_ENV=${APP_ENV:-production}|" /var/www/html/.env
 sed -i "s|^APP_DEBUG=.*|APP_DEBUG=${APP_DEBUG:-false}|" /var/www/html/.env
 sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION:-sqlite}|" /var/www/html/.env
+sed -i "s|^MAIL_MAILER=.*|MAIL_MAILER=${MAIL_MAILER:-smtp}|" /var/www/html/.env
+sed -i "s|^MAIL_HOST=.*|MAIL_HOST=${MAIL_HOST:-smtp.gmail.com}|" /var/www/html/.env
+sed -i "s|^MAIL_PORT=.*|MAIL_PORT=${MAIL_PORT:-587}|" /var/www/html/.env
+sed -i "s|^MAIL_USERNAME=.*|MAIL_USERNAME=${MAIL_USERNAME:-rafidul.labar.bd@gmail.com}|" /var/www/html/.env
+sed -i "s|^MAIL_PASSWORD=.*|MAIL_PASSWORD=${MAIL_PASSWORD:-cwiigttcebziaoig}|" /var/www/html/.env
+sed -i "s|^MAIL_ENCRYPTION=.*|MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}|" /var/www/html/.env
+sed -i "s|^MAIL_FROM_ADDRESS=.*|MAIL_FROM_ADDRESS=\"${MAIL_FROM_ADDRESS:-rafidul.labar.bd@gmail.com}\"|" /var/www/html/.env
+sed -i "s|^MAIL_FROM_NAME=.*|MAIL_FROM_NAME=\"${MAIL_FROM_NAME:-খুলনা সেবা}\"|" /var/www/html/.env
 
 # Substitute PORT in Nginx configuration
 sed -i "s/PORT_PLACEHOLDER/$PORT/g" /etc/nginx/http.d/default.conf

@@ -144,10 +144,11 @@ class CitizenAuthController extends Controller
     {
         $cleanedPhone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
         $cleanedNid = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->nid));
+        $cleanedEmail = strtolower(trim($request->email));
         $request->merge([
             'phone' => $cleanedPhone,
             'nid' => $cleanedNid,
-            'email' => $request->filled('email') ? trim($request->email) : null,
+            'email' => $cleanedEmail,
         ]);
 
         $request->validate([
@@ -155,7 +156,7 @@ class CitizenAuthController extends Controller
             'phone' => 'required|string|digits:11|unique:users,phone',
             'nid' => 'required|string|min:10|max:17|unique:users,nid',
             'password' => 'required|string|min:6',
-            'email' => 'nullable|email|max:100|unique:users,email',
+            'email' => 'required|email|max:100|unique:users,email',
             'division' => 'nullable|string|max:50',
             'district' => 'required|string|max:100',
             'upazila' => 'required|string|max:100',
@@ -173,6 +174,7 @@ class CitizenAuthController extends Controller
             'nid.unique' => 'এই NID নম্বরে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে।',
             'password.required' => 'পাসওয়ার্ড নির্ধারণ করা আবশ্যক।',
             'password.min' => 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।',
+            'email.required' => 'ইমেইল ঠিকানা প্রদান করা আবশ্যক।',
             'email.email' => 'সঠিক ইমেইল ঠিকানা প্রদান করুন।',
             'email.unique' => 'এই ইমেইল দিয়ে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে।',
             'district.required' => 'জেলা নির্বাচন করা আবশ্যক।',
@@ -195,7 +197,7 @@ class CitizenAuthController extends Controller
                 'phone' => $cleanedPhone,
                 'nid' => $cleanedNid,
                 'password' => Hash::make($request->password),
-                'email' => $request->email,
+                'email' => $cleanedEmail,
                 'division' => $request->division ?: 'খুলনা',
                 'district' => $request->district,
                 'upazila' => $request->upazila,
@@ -227,6 +229,7 @@ class CitizenAuthController extends Controller
     {
         $cleanedPhone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
         $cleanedOtp = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->otp_code));
+        $cleanedEmail = strtolower(trim($request->email));
         $request->merge(['phone' => $cleanedPhone, 'otp_code' => $cleanedOtp]);
 
         $request->validate([
