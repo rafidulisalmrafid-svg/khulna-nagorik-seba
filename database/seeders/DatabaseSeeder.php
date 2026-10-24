@@ -609,5 +609,76 @@ class DatabaseSeeder extends Seeder
         if (isset($officer)) {
             $officer->assignedServices()->sync(Service::pluck('id'));
         }
+    
+        // ---------------------------------------------------------
+        // 13. Sliders & Slider Settings Seeder
+        // ---------------------------------------------------------
+        \App\Models\SliderSetting::updateOrCreate(
+            ['id' => 1],
+            [
+                'autoplay_seconds' => 3,
+                'transition_effect' => 'fade',
+                'show_indicators' => true,
+                'show_arrows' => true,
+                'is_enabled' => true,
+            ]
+        );
+
+        $defaultSliders = [
+            [
+                'id' => 1,
+                'title_bn' => 'রূপসা সেতু ও ঐতিহ্যবাহী নদী',
+                'subtitle_bn' => 'খুলনা নগরীর প্রবেশদ্বার খান জাহান আলী (রূপসা) সেতুর গোধূলিবেলার নয়নাভিরাম সৌন্দর্য।',
+                'image_path' => 'sliders/rupsha_bridge.jpg',
+                'button_text_bn' => 'নাগরিক সেবা গ্রহণ করুন',
+                'button_url' => '/services',
+                'display_order' => 1,
+                'is_active' => true,
+            ],
+            [
+                'id' => 2,
+                'title_bn' => 'বিশ্ব ঐতিহ্য সুন্দরবনের প্রবেশদ্বার',
+                'subtitle_bn' => 'সবুজ শ্যামল প্রকৃতি ও পৃথিবীর সর্ববৃহৎ ম্যানগ্রোভ বনের অফুরন্ত প্রাকৃতিক বৈচিত্র্য।',
+                'image_path' => 'sliders/sundarbans.jpg',
+                'button_text_bn' => 'আমাদের সেবা সমূহ',
+                'button_url' => '/services',
+                'display_order' => 2,
+                'is_active' => true,
+            ],
+            [
+                'id' => 3,
+                'title_bn' => 'ঐতিহাসিক শহীদ হাদিস পার্ক',
+                'subtitle_bn' => 'খুলনা শহরের হৃদপিণ্ড—শান্ত লেক, স্মৃতিস্তম্ভ ও প্রস্ফুটিত পুষ্পশোভিত নগর উদ্যান।',
+                'image_path' => 'sliders/hadis_park.jpg',
+                'button_text_bn' => 'আবেদন ট্র্যাকিং',
+                'button_url' => '/applications/track',
+                'display_order' => 3,
+                'is_active' => true,
+            ],
+            [
+                'id' => 4,
+                'title_bn' => 'খুলনা সিটি কর্পোরেশন',
+                'subtitle_bn' => 'আধুনিক, পরিচ্ছন্ন ও প্রযুক্তিনির্ভর স্মার্ট নাগরিক সেবার বিশ্বস্ত ঠিকানা।',
+                'image_path' => 'sliders/city_corporation.jpg',
+                'button_text_bn' => 'নাগরিক চার্টার দেখুন',
+                'button_url' => '/services',
+                'display_order' => 4,
+                'is_active' => true,
+            ],
+            [
+                'id' => 5,
+                'title_bn' => 'খাঁন জাহান আলীর পুণ্যভূমি',
+                'subtitle_bn' => 'ঐতিহাসিক লাল ইটের টেরাকোটা স্থাপত্য ও শতাব্দী প্রাচীন ঐতিহ্যমণ্ডিত দীঘি।',
+                'image_path' => 'sliders/khan_jahan_ali.jpg',
+                'button_text_bn' => 'অভিযোগ দাখিল করুন',
+                'button_url' => '/complaints/new',
+                'display_order' => 5,
+                'is_active' => true,
+            ],
+        ];
+
+        foreach ($defaultSliders as $slide) {
+            \App\Models\Slider::updateOrCreate(['id' => $slide['id']], $slide);
+        }
     }
 }

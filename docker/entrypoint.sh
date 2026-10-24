@@ -55,11 +55,8 @@ echo "==> Running database migrations..."
 php artisan migrate --force
 
 # Seed if database is fresh / not seeded yet
-if [ ! -f /var/www/html/database/.seeded ]; then
-    echo "==> Seeding database..."
-    php artisan db:seed --force || true
-    touch /var/www/html/database/.seeded
-fi
+echo "==> Ensuring database is seeded (services, admin, sliders)..."
+php artisan db:seed --force || true
 
 # Cache configuration and routes for production speed
 echo "==> Caching configuration and routes..."
