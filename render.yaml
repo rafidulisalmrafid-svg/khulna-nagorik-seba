@@ -17,7 +17,7 @@ services:
       - key: APP_URL
         sync: false
       - key: APP_KEY
-        generateValue: true
+        value: "base64:lIFv76mQqKOFmzLOwWtkowXGuco2uULJ17vW92hugBw="
       - key: DB_CONNECTION
         value: sqlite
       - key: SESSION_DRIVER

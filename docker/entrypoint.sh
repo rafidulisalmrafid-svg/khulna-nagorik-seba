@@ -4,10 +4,27 @@ set -e
 PORT=${PORT:-10000}
 echo "==> Starting Khulna Seba on port $PORT..."
 
+# Ensure valid APP_KEY with 32-byte AES base64 encoding
+if [ -z "$APP_KEY" ] || [ ${#APP_KEY} -lt 40 ]; then
+    echo "==> Setting default valid APP_KEY..."
+    export APP_KEY="base64:lIFv76mQqKOFmzLOwWtkowXGuco2uULJ17vW92hugBw="
+fi
+
+# Ensure .env exists
+if [ ! -f /var/www/html/.env ]; then
+    cp /var/www/html/.env.example /var/www/html/.env
+fi
+
+# Update APP_KEY in .env
+sed -i "s|^APP_KEY=.*|APP_KEY=$APP_KEY|" /var/www/html/.env
+sed -i "s|^APP_ENV=.*|APP_ENV=${APP_ENV:-production}|" /var/www/html/.env
+sed -i "s|^APP_DEBUG=.*|APP_DEBUG=${APP_DEBUG:-false}|" /var/www/html/.env
+sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION:-sqlite}|" /var/www/html/.env
+
 # Substitute PORT in Nginx configuration
 sed -i "s/PORT_PLACEHOLDER/$PORT/g" /etc/nginx/http.d/default.conf
 
-# Ensure SQLite database exists and is writable if using SQLite
+# Ensure SQLite database exists and is writable
 mkdir -p /var/www/html/database
 if [ "$DB_CONNECTION" = "sqlite" ] || [ -z "$DB_CONNECTION" ]; then
     if [ ! -f /var/www/html/database/database.sqlite ]; then
@@ -27,11 +44,11 @@ mkdir -p /var/www/html/bootstrap/cache
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
+# Clear old cache
+php artisan config:clear || true
+
 # Storage symlink
 php artisan storage:link --force || true
-
-# Clear old cached config before running migrations
-php artisan config:clear || true
 
 # Run database migrations
 echo "==> Running database migrations..."
