@@ -233,12 +233,13 @@ export default function Register({ initialPhone = '', redirect = '' }) {
             const cleanOtp = bnToEnNumber(otpCode).replace(/[^0-9]/g, '');
             const res = await axios.post('/auth/verify-register-otp', {
                 phone: bnToEnNumber(formData.phone).replace(/[^0-9]/g, ''),
+                email: formData.email ? formData.email.trim().toLowerCase() : '',
                 otp_code: cleanOtp,
                 redirect: redirect,
             });
 
             if (res.data.success) {
-                window.location.href = res.data.redirect_url;
+                window.location.href = res.data.redirect || res.data.redirect_url || "/citizen/dashboard";
             }
         } catch (err) {
             if (err.response?.data?.message) {
@@ -734,23 +735,41 @@ export default function Register({ initialPhone = '', redirect = '' }) {
                         </div>
                     )}
 
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
-                        <div className="w-12 h-12 rounded-full bg-gov-100 text-gov-700 flex items-center justify-center mx-auto ring-4 ring-gov-50">
-                            <Phone className="w-6 h-6" />
+                    {/* Dual Delivery Channel: Mobile SMS & Email */}
+                    <div className="p-4 bg-gradient-to-br from-emerald-50/80 via-slate-50 to-blue-50/60 border border-emerald-200/80 rounded-2xl space-y-3 shadow-xs">
+                        <div className="flex items-center justify-center gap-2">
+                            <span className="p-2 rounded-full bg-emerald-100 text-emerald-700 ring-2 ring-emerald-50">
+                                <Phone className="w-4 h-4" />
+                            </span>
+                            <span className="text-slate-400 font-bold text-sm">+</span>
+                            <span className="p-2 rounded-full bg-blue-100 text-blue-700 ring-2 ring-blue-50">
+                                <Mail className="w-4 h-4" />
+                            </span>
                         </div>
-                        <div>
-                            <p className="text-xs text-slate-500">
-                                আমরা আপনার এই মোবাইল নম্বরে একটি ৬ ডিজিটের কোড পাঠিয়েছি:
+
+                        <div className="text-center space-y-1">
+                            <h4 className="text-sm font-bold text-slate-900">
+                                একই ওটিপি মোবাইল ও ইমেইলে পাঠানো হয়েছে
+                            </h4>
+                            <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                                আপনার মোবাইল <strong className="text-slate-900 font-mono font-bold">{formData.phone}</strong> এবং ইমেইল <strong className="text-emerald-800 font-mono font-bold">{formData.email}</strong>—উভয় মাধ্যমেই একই ৬ ডিজিটের ওটিপি কোড পাঠানো হয়েছে।
                             </p>
-                            <p className="text-sm font-extrabold text-navy-950 mt-0.5">{formData.phone}</p>
+                            <div className="pt-1">
+                                <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200 inline-block">
+                                    ✓ যেকোনো একটি মাধ্যম (মোবাইল বা ইমেইল) থেকে কোডটি দিলেই হবে
+                                </span>
+                            </div>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setCurrentStep(1)}
-                            className="text-[11px] font-bold text-gov-700 hover:underline"
-                        >
-                            ভুল নম্বর? তথ্য সংশোধন করুন
-                        </button>
+
+                        <div className="pt-1 text-center border-t border-slate-200/60">
+                            <button
+                                type="button"
+                                onClick={() => setCurrentStep(1)}
+                                className="text-[11px] font-bold text-gov-700 hover:underline"
+                            >
+                                তথ্য পরিবর্তন করতে চান? ধাপ ১-এ ফিরে যান
+                            </button>
+                        </div>
                     </div>
 
                     {/* OTP 6-Digit Input */}

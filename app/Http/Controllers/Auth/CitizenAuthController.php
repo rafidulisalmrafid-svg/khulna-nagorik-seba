@@ -184,6 +184,7 @@ class CitizenAuthController extends Controller
 
         $otpCode = (string) mt_rand(100000, 999999);
 
+        // Delete previous unverified register OTPs for this phone or email
         Otp::where('phone', $cleanedPhone)
             ->where('action', 'register')
             ->delete();
@@ -209,9 +210,15 @@ class CitizenAuthController extends Controller
             'is_used' => false,
         ]);
 
+        // 1. Dispatch OTP directly to citizen's Email via Gmail SMTP
+        \App\Services\EmailNotificationService::sendOtpNotification($cleanedEmail, $request->name, $otpCode, $cleanedPhone);
+
+        // 2. Dispatch OTP to citizen's Mobile Phone SMS (Simulated / Gateway logging)
+        \Illuminate\Support\Facades\Log::info("Dual OTP dispatched to Phone [{$cleanedPhone}] and Email [{$cleanedEmail}]: {$otpCode}");
+
         $responseData = [
             'success' => true,
-            'message' => "আপনার {$cleanedPhone} নম্বরে একটি ৬ ডিজিটের ওটিপি পাঠানো হয়েছে।",
+            'message' => "আপনার মোবাইল ({$cleanedPhone}) এবং ইমেইল ({$cleanedEmail}) উভয় মাধ্যমেই একই ৬ ডিজিটের ওটিপি পাঠানো হয়েছে। যেকোনো একটি মাধ্যম থেকে কোডটি দিয়ে ভেরিফাই সম্পন্ন করুন।",
         ];
 
         // Only expose dev_otp in strictly local debug mode
@@ -229,37 +236,56 @@ class CitizenAuthController extends Controller
     {
         $cleanedPhone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
         $cleanedOtp = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->otp_code));
-        $cleanedEmail = strtolower(trim($request->email));
-        $request->merge(['phone' => $cleanedPhone, 'otp_code' => $cleanedOtp]);
+        $cleanedEmail = $request->filled('email') ? strtolower(trim($request->email)) : null;
+
+        $request->merge([
+            'phone' => $cleanedPhone,
+            'otp_code' => $cleanedOtp,
+            'email' => $cleanedEmail,
+        ]);
 
         $request->validate([
-            'phone' => 'required|string',
             'otp_code' => 'required|string|size:6',
+            'phone' => 'nullable|string',
+            'email' => 'nullable|email',
             'redirect' => 'nullable|string',
         ], [
             'otp_code.required' => 'ওটিপি কোড দেওয়া আবশ্যক।',
             'otp_code.size' => 'ওটিপি কোড ৬ ডিজিটের হতে হবে।',
         ]);
 
-        $otp = Otp::where('phone', $cleanedPhone)
-            ->where('action', 'register')
-            ->where('is_used', false)
-            ->latest()
-            ->first();
+        // Find OTP by phone or by email stored in payload
+        $otp = null;
+        if (!empty($cleanedPhone)) {
+            $otp = Otp::where('phone', $cleanedPhone)
+                ->where('action', 'register')
+                ->where('is_used', false)
+                ->latest()
+                ->first();
+        }
+
+        if (!$otp && !empty($cleanedEmail)) {
+            $otp = Otp::where('payload->email', $cleanedEmail)
+                ->where('action', 'register')
+                ->where('is_used', false)
+                ->latest()
+                ->first();
+        }
 
         if (!$otp || !$otp->isValid($cleanedOtp)) {
             return response()->json([
                 'success' => false,
-                'message' => 'ভুল অথবা মেয়াদোত্তীর্ণ ওটিপি কোড! অনুগ্রহ করে সঠিক কোড দিন।',
+                'message' => 'ভুল অথবা মেয়াদোত্তীর্ণ ওটিপি কোড! অনুগ্রহ করে আপনার মোবাইল বা ইমেইলে প্রাপ্ত সঠিক কোডটি দিন।',
             ], 422);
         }
 
         $payload = $otp->payload;
 
-        if (User::where('phone', $payload['phone'])->exists()) {
+        // Check if user already exists by phone or email
+        if (User::where('phone', $payload['phone'])->orWhere('email', $payload['email'])->exists()) {
             return response()->json([
                 'success' => false,
-                'message' => 'এই মোবাইল নম্বরে ইতোমধ্যে অ্যাকাউন্ট তৈরি হয়ে গেছে।',
+                'message' => 'এই মোবাইল বা ইমেইল দিয়ে ইতোমধ্যে অ্যাকাউন্ট তৈরি হয়ে গেছে। অনুগ্রহ করে লগইন করুন।',
             ], 422);
         }
 

@@ -12,11 +12,13 @@ class EmailNotificationService
     /**
      * Send OTP Verification Email to Citizen for Register / Login
      */
-    public static function sendOtpNotification(string $email, string $name, string $otp): bool
+    public static function sendOtpNotification(string $email, string $name, string $otp, ?string $phone = null): bool
     {
         try {
-            $subject = "খুলনা সেবা - আপনার ওটিপি (OTP) ভেরিফিকেশন কোড: {$otp}";
+            $subject = "খুলনা সেবা - আপনার ওটিপি (OTP) কোড: {$otp}";
             
+            $phoneNote = $phone ? "<p style='margin: 8px 0; color: #065f46; font-size: 13px; background: #e6fcf5; padding: 8px 12px; border-radius: 8px;'>📱 এই একই কোডটি আপনার মোবাইল নম্বর <strong>{$phone}</strong>-এও পাঠানো হয়েছে।</p>" : "";
+
             $html = <<<HTML
 <!DOCTYPE html>
 <html lang="bn">
@@ -30,11 +32,12 @@ class EmailNotificationService
     .header p { margin: 0; font-size: 13px; opacity: 0.9; }
     .content { padding: 32px 24px; }
     .greeting { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #0f172a; }
-    .message { font-size: 14px; line-height: 1.7; color: #475569; margin-bottom: 24px; }
-    .otp-box { background: #f0fdf4; border: 2px dashed #10b981; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0; }
+    .message { font-size: 14px; line-height: 1.7; color: #475569; margin-bottom: 20px; }
+    .otp-box { background: #f0fdf4; border: 2px dashed #10b981; border-radius: 12px; padding: 24px; text-align: center; margin: 20px 0; }
     .otp-label { font-size: 12px; color: #047857; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-    .otp-code { font-size: 36px; font-weight: 800; color: #065f46; letter-spacing: 8px; font-family: monospace; }
-    .warning { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; font-size: 12px; color: #92400e; line-height: 1.5; margin-top: 24px; }
+    .otp-code { font-size: 38px; font-weight: 800; color: #065f46; letter-spacing: 8px; font-family: monospace; }
+    .dual-note { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #1e40af; line-height: 1.6; margin: 20px 0; }
+    .warning { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; font-size: 12px; color: #92400e; line-height: 1.5; margin-top: 20px; }
     .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
 </style>
 </head>
@@ -47,14 +50,23 @@ class EmailNotificationService
     <div class="content">
         <div class="greeting">সম্মানিত নাগরিক {$name},</div>
         <div class="message">
-            খুলনা সেবা পোর্টালে আপনার অ্যাকাউন্ট যাচাইকরণ/লগইন অনুরোধের প্রেক্ষিতে এই ওটিপি (OTP) কোডটি প্রদান করা হলো:
+            খুলনা সেবা পোর্টালে আপনার নতুন নাগরিক অ্যাকাউন্ট যাচাইয়ের জন্য এই ওটিপি কোডটি প্রদান করা হলো।
         </div>
+
         <div class="otp-box">
-            <div class="otp-label">আপনার ওটিপি ভেরিফিকেশন কোড</div>
+            <div class="otp-label">আপনার ওটিপি ভেরিফিকেশন কোড (৬ ডিজিট)</div>
             <div class="otp-code">{$otp}</div>
         </div>
+
+        <div class="dual-note">
+            💡 <strong>যেকোনো একটি মাধ্যম দিয়ে যাচাই করুন:</strong><br>
+            এই একই ৬ ডিজিটের ওটিপি কোডটি একই সাথে আপনার মোবাইল নম্বর ও এই ইমেইল ঠিকানায় পাঠানো হয়েছে। <strong>মোবাইল এসএমএস অথবা ইমেইল—যেকোনো একটি মাধ্যমে প্রাপ্ত কোডটি দিলেই আপনার অ্যাকাউন্ট সম্পূর্ণ ভেরিফাই হয়ে যাবে।</strong>
+        </div>
+
+        {$phoneNote}
+
         <div class="warning">
-            ⚠️ <strong>সতর্কতা:</strong> এই কোডটি আগামী <strong>৫ মিনিটের</strong> জন্য কার্যকর থাকবে। আপনার ওটিপি কোডটি কখনোই অন্য কারো সাথে শেয়ার করবেন না।
+            ⚠️ <strong>সতর্কতা:</strong> এই কোডটি আগামী <strong>১০ মিনিটের</strong> জন্য কার্যকর থাকবে। আপনার ওটিপি কোডটি কখনোই অন্য কারো সাথে শেয়ার করবেন না।
         </div>
     </div>
     <div class="footer">
