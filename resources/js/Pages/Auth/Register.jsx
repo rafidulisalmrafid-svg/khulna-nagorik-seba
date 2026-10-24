@@ -486,13 +486,13 @@ export default function Register({ initialPhone = '', redirect = '' }) {
                         )}
                     </div>
 
-                    {/* Email (Optional) */}
+                    {/* Email (Mandatory) */}
                     <div>
                         <div className="flex items-center justify-between mb-1">
                             <label className="block text-xs font-bold text-slate-700">
-                                ইমেইল ঠিকানা <span className="text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                                ইমেইল ঠিকানা <span className="text-rose-500 font-bold">*</span>
                             </label>
-                            <span className="text-[10px] text-slate-400">জরুরি নোটিফিকেশনের জন্য</span>
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">বাধ্যতামূলক (ওটিপি ও লাইসেন্স প্রাপ্তির জন্য)</span>
                         </div>
                         <div className="relative">
                             <input
