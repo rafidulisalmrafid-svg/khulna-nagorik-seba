@@ -397,13 +397,37 @@ export default function Register({ initialPhone = '', redirect = '' }) {
             {currentStep === 1 && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                     <div className="p-3 bg-slate-50/70 border border-slate-200/80 rounded-xl">
-                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                            <User className="w-4 h-4 text-gov-600" />
-                            <span>১. প্রাথমিক পরিচয় ও যোগাযোগের তথ্য</span>
-                        </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                            আপনার জাতীয় পরিচয়পত্র অনুযায়ী সঠিক নাম ও তথ্য প্রদান করুন
-                        </p>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                                    <User className="w-4 h-4 text-gov-600" />
+                                    <span>১. প্রাথমিক পরিচয় ও যোগাযোগের তথ্য</span>
+                                </h4>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                    আপনার জাতীয় পরিচয়পত্র অনুযায়ী সঠিক নাম ও তথ্য প্রদান করুন
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const randSuffix = Math.floor(1000 + Math.random() * 9000);
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        name: 'রফিকুল ইসলাম রাফিদ',
+                                        phone: `01711${randSuffix}`,
+                                        nid: `1995123456789${randSuffix}`,
+                                        email: 'rafidul.isalm.rafid@gmail.com',
+                                        password: 'Password@123',
+                                        password_confirmation: 'Password@123',
+                                    }));
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-300 transition-all shadow-sm cursor-pointer"
+                                title="টেস্টিংয়ের জন্য ডেমো তথ্য স্বয়ংক্রিয়ভাবে পূরণ করুন"
+                            >
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                                <span>ডেমো ডাটা পূরণ (rafidul.isalm.rafid@gmail.com)</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Name */}

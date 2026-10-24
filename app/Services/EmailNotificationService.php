@@ -6,20 +6,77 @@ use App\Models\Application;
 use App\Models\Complaint;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Mailer\Transport;
+use Symfony\Component\Mailer\Mailer;
+use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Address;
 
 class EmailNotificationService
 {
+    /**
+     * Helper to send HTML email with multi-layer fallback (Laravel Mail -> SMTP 587 -> SMTPS 465)
+     */
+    public static function sendEmailDirect(string $toEmail, string $subject, string $htmlContent): bool
+    {
+        // 1. First Attempt: Standard Laravel Mailer
+        try {
+            Mail::html($htmlContent, function ($message) use ($toEmail, $subject) {
+                $message->to($toEmail)
+                        ->from('rafidul.labar.bd@gmail.com', 'খুলনা সেবা')
+                        ->subject($subject);
+            });
+            Log::info("Email successfully sent via Laravel Mailer to: {$toEmail}");
+            return true;
+        } catch (\Throwable $e1) {
+            Log::warning("Laravel Mailer failed for {$toEmail}: " . $e1->getMessage() . " - Falling back to direct Symfony SMTP...");
+        }
+
+        // 2. Second Attempt: Direct Symfony Mailer on Port 587 (TLS)
+        try {
+            $dsn587 = 'smtp://rafidul.labar.bd%40gmail.com:cwiigttcebziaoig@smtp.gmail.com:587';
+            $transport587 = Transport::fromDsn($dsn587);
+            $mailer587 = new Mailer($transport587);
+            $emailObj = (new Email())
+                ->from(new Address('rafidul.labar.bd@gmail.com', 'খুলনা সেবা'))
+                ->to($toEmail)
+                ->subject($subject)
+                ->html($htmlContent);
+            $mailer587->send($emailObj);
+            Log::info("Email successfully sent via direct Symfony SMTP (Port 587) to: {$toEmail}");
+            return true;
+        } catch (\Throwable $e2) {
+            Log::warning("Symfony SMTP 587 failed for {$toEmail}: " . $e2->getMessage() . " - Falling back to SMTPS 465...");
+        }
+
+        // 3. Third Attempt: Direct Symfony Mailer on Port 465 (SSL)
+        try {
+            $dsn465 = 'smtps://rafidul.labar.bd%40gmail.com:cwiigttcebziaoig@smtp.gmail.com:465';
+            $transport465 = Transport::fromDsn($dsn465);
+            $mailer465 = new Mailer($transport465);
+            $emailObj = (new Email())
+                ->from(new Address('rafidul.labar.bd@gmail.com', 'খুলনা সেবা'))
+                ->to($toEmail)
+                ->subject($subject)
+                ->html($htmlContent);
+            $mailer465->send($emailObj);
+            Log::info("Email successfully sent via direct Symfony SMTPS (Port 465) to: {$toEmail}");
+            return true;
+        } catch (\Throwable $e3) {
+            Log::error("All SMTP attempts failed for {$toEmail}: 587 Error: " . $e2->getMessage() . " | 465 Error: " . $e3->getMessage());
+            return false;
+        }
+    }
+
     /**
      * Send OTP Verification Email to Citizen for Register / Login
      */
     public static function sendOtpNotification(string $email, string $name, string $otp, ?string $phone = null): bool
     {
-        try {
-            $subject = "খুলনা সেবা - আপনার ওটিপি (OTP) কোড: {$otp}";
-            
-            $phoneNote = $phone ? "<p style='margin: 8px 0; color: #065f46; font-size: 13px; background: #e6fcf5; padding: 8px 12px; border-radius: 8px;'>📱 এই একই কোডটি আপনার মোবাইল নম্বর <strong>{$phone}</strong>-এও পাঠানো হয়েছে।</p>" : "";
+        $subject = "খুলনা সেবা - আপনার ওটিপি (OTP) কোড: {$otp}";
+        
+        $phoneNote = $phone ? "<p style='margin: 8px 0; color: #065f46; font-size: 13px; background: #e6fcf5; padding: 8px 12px; border-radius: 8px;'>📱 এই একই ওটিপি কোডটি আপনার মোবাইল নম্বর <strong>{$phone}</strong>-এও পাঠানো হয়েছে।</p>" : "";
 
-            $html = <<<HTML
+        $html = <<<HTML
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -48,67 +105,55 @@ class EmailNotificationService
         <p>নাগরিক ডিজিটাল সেবা পোর্টাল (খুলনা সেবা)</p>
     </div>
     <div class="content">
-        <div class="greeting">সম্মানিত নাগরিক {$name},</div>
-        <div class="message">
-            খুলনা সেবা পোর্টালে আপনার নতুন নাগরিক অ্যাকাউন্ট যাচাইয়ের জন্য এই ওটিপি কোডটি প্রদান করা হলো।
-        </div>
+        <div class="greeting">সম্মানিত {$name},</div>
+        <p class="message">
+            খুলনা সেবা পোর্টালে আপনার অ্যাকাউন্ট যাচাই বা নিরাপদ প্রবেশের জন্য এককালীন ওটিপি (One-Time Password) প্রদান করা হলো।
+        </p>
 
         <div class="otp-box">
-            <div class="otp-label">আপনার ওটিপি ভেরিফিকেশন কোড (৬ ডিজিট)</div>
+            <div class="otp-label">আপনার ওটিপি (OTP) ভেরিফিকেশন কোড</div>
             <div class="otp-code">{$otp}</div>
         </div>
 
         <div class="dual-note">
-            💡 <strong>যেকোনো একটি মাধ্যম দিয়ে যাচাই করুন:</strong><br>
-            এই একই ৬ ডিজিটের ওটিপি কোডটি একই সাথে আপনার মোবাইল নম্বর ও এই ইমেইল ঠিকানায় পাঠানো হয়েছে। <strong>মোবাইল এসএমএস অথবা ইমেইল—যেকোনো একটি মাধ্যমে প্রাপ্ত কোডটি দিলেই আপনার অ্যাকাউন্ট সম্পূর্ণ ভেরিফাই হয়ে যাবে।</strong>
+            <strong>🔄 যৌথ ওটিপি সিস্টেম (Dual Channel Delivery):</strong>
+            {$phoneNote}
+            <p style="margin: 4px 0 0 0;">আপনি মোবাইল এসএমএস অথবা ইমেইল—যেকোনো একটির ওটিপি দিয়ে ভেরিফিকেশন সম্পন্ন করতে পারবেন।</p>
         </div>
 
-        {$phoneNote}
-
         <div class="warning">
-            ⚠️ <strong>সতর্কতা:</strong> এই কোডটি আগামী <strong>১০ মিনিটের</strong> জন্য কার্যকর থাকবে। আপনার ওটিপি কোডটি কখনোই অন্য কারো সাথে শেয়ার করবেন না।
+            ⚠️ <strong>নিরাপত্তা সতর্কতা:</strong> এই ওটিপি কোডটির মেয়াদ <strong>১০ মিনিট</strong>। আপনার ওটিপি কোডটি কখনোই অন্য কারও সাথে শেয়ার করবেন না। খুলনা সিটি কর্পোরেশনের কোনো প্রতিনিধি আপনার কাছে ওটিপি চাইবে না।
         </div>
     </div>
     <div class="footer">
-        © খুলনা সিটি কর্পোরেশন • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২ • ইমেইল: rafidul.labar.bd@gmail.com
+        © খুলনা সিটি কর্পোরেশন • নাগরিক সেবা বিভাগ • সর্বস্বত্ব সংরক্ষিত
     </div>
 </div>
 </body>
 </html>
 HTML;
 
-            Mail::html($html, function ($message) use ($email, $subject) {
-                $message->to($email)
-                        ->subject($subject);
-            });
-
-            Log::info("OTP email sent successfully to: {$email}");
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("Failed to send OTP email to {$email}: " . $e->getMessage());
-            return false;
-        }
+        return self::sendEmailDirect($email, $subject, $html);
     }
 
     /**
-     * Send Application Submitted Confirmation Email
+     * Send Application Submitted Notification Email
      */
     public static function sendApplicationSubmittedNotification(Application $application): bool
     {
-        try {
-            $user = $application->user;
-            $email = $user->email ?? $application->email ?? null;
-            if (!$email) return false;
+        $user = $application->user;
+        $email = $user->email ?? $application->email ?? null;
+        if (!$email) return false;
 
-            $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
-            $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
-            $trackingId = $application->tracking_id;
-            $submittedAt = $application->created_at ? $application->created_at->format('d M, Y h:i A') : date('d M, Y');
-            $trackUrl = url("/applications/track?tracking_id={$trackingId}");
+        $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
+        $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
+        $trackingId = $application->tracking_id;
+        $trackUrl = url("/applications/track?tracking_id={$trackingId}");
+        $createdAt = $application->created_at ? $application->created_at->format('d/m/Y h:i A') : date('d/m/Y');
 
-            $subject = "✅ আবেদন সফলভাবে দাখিল হয়েছে - ট্র্যাকিং নম্বর: {$trackingId}";
+        $subject = "খুলনা সেবা - আবেদন গৃহীত হয়েছে: {$serviceName} (ট্র্যাকিং: {$trackingId})";
 
-            $html = <<<HTML
+        $html = <<<HTML
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -116,17 +161,15 @@ HTML;
 <style>
     body { font-family: 'SolaimanLipi', Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
     .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-    .header { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
-    .header h1 { margin: 0 0 6px 0; font-size: 22px; font-weight: bold; }
+    .header { background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: bold; }
+    .header p { margin: 0; font-size: 13px; opacity: 0.9; }
     .content { padding: 32px 24px; }
-    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #0f172a; }
-    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; }
-    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
-    .row:last-child { border-bottom: none; }
-    .label { color: #64748b; font-weight: 500; }
-    .val { color: #0f172a; font-weight: bold; }
-    .tracking-badge { background: #e0f2fe; color: #0369a1; padding: 6px 14px; border-radius: 20px; font-family: monospace; font-size: 16px; font-weight: bold; display: inline-block; }
-    .btn { display: inline-block; background: #0284c7; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; font-size: 14px; text-align: center; margin-top: 16px; }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #0f172a; }
+    .tracking-box { background: #f0fdfa; border: 2px solid #5eead4; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0; }
+    .tracking-label { font-size: 12px; color: #0f766e; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
+    .tracking-id { font-size: 24px; font-weight: bold; color: #115e59; font-family: monospace; letter-spacing: 2px; }
+    .btn { display: inline-block; background: #0f766e; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; font-size: 14px; text-align: center; }
     .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
 </style>
 </head>
@@ -134,35 +177,26 @@ HTML;
 <div class="container">
     <div class="header">
         <h1>খুলনা সিটি কর্পোরেশন</h1>
-        <p>নাগরিক সেবা আবেদন প্রাপ্তি স্বীকার</p>
+        <p>নাগরিক সেবা আবেদন প্রাপ্তি নিশ্চিতকরণ</p>
     </div>
     <div class="content">
         <div class="greeting">সম্মানিত {$applicantName},</div>
         <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            খুলনা সেবা পোর্টালে আপনার <strong>{$serviceName}</strong>-এর আবেদন সফলভাবে গৃহীত হয়েছে। আবেদনটি সংশ্লিষ্ট কর্মকর্তার নিকট পর্যালোচনার জন্য প্রেরণ করা হয়েছে।
+            খুলনা সেবা পোর্টালে আপনার <strong>{$serviceName}</strong>-এর আবেদনটি সফলভাবে গৃহীত হয়েছে। কর্তৃপক্ষ শীঘ্রই আপনার আবেদনটি পর্যালোচনা করবে।
         </p>
-        
-        <div class="card">
-            <div class="row">
-                <span class="label">সেবার নাম:</span>
-                <span class="val">{$serviceName}</span>
-            </div>
-            <div class="row">
-                <span class="label">ট্র্যাকিং নম্বর:</span>
-                <span class="val"><span class="tracking-badge">{$trackingId}</span></span>
-            </div>
-            <div class="row">
-                <span class="label">দাখিলের তারিখ:</span>
-                <span class="val">{$submittedAt}</span>
-            </div>
-            <div class="row">
-                <span class="label">বর্তমান অবস্থা:</span>
-                <span class="val" style="color: #0284c7;">জমা হয়েছে (Submitted)</span>
-            </div>
+
+        <div class="tracking-box">
+            <div class="tracking-label">আপনার আবেদনের ট্র্যাকিং নম্বর</div>
+            <div class="tracking-id">{$trackingId}</div>
         </div>
 
-        <div style="text-align: center; margin-top: 24px;">
-            <a href="{$trackUrl}" class="btn">লাইভ ট্র্যাকিং দেখুন →</a>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 24px;">
+            আবেদনের তারিখ: <strong>{$createdAt}</strong><br>
+            যেকোনো সময় এই ট্র্যাকিং নম্বর দিয়ে আপনার আবেদনের সর্বশেষ অবস্থা জানতে পারবেন।
+        </p>
+
+        <div style="text-align: center; margin: 24px 0;">
+            <a href="{$trackUrl}" class="btn">আবেদনের অগ্রগতি ট্র্যাক করুন →</a>
         </div>
     </div>
     <div class="footer">
@@ -173,51 +207,41 @@ HTML;
 </html>
 HTML;
 
-            Mail::html($html, function ($message) use ($email, $subject) {
-                $message->to($email)
-                        ->subject($subject);
-            });
-
-            Log::info("Application submitted email sent to: {$email}");
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("Failed to send application submitted email: " . $e->getMessage());
-            return false;
-        }
+        return self::sendEmailDirect($email, $subject, $html);
     }
 
     /**
-     * Send License / Certificate Approved Notification Email
+     * Send License / Certificate Approved Notification Email with Direct Download Link
      */
     public static function sendLicenseApprovedNotification(Application $application): bool
     {
-        try {
-            $user = $application->user;
-            $email = $user->email ?? $application->email ?? null;
-            if (!$email) return false;
+        $user = $application->user;
+        $email = $user->email ?? $application->email ?? null;
+        if (!$email) return false;
 
-            $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
-            $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
-            $trackingId = $application->tracking_id;
-            $certificateNo = $application->certificate_number ?: 'CERT-KCC-'.date('Y').'-'.mt_rand(100000, 999999);
-            $certUrl = url("/applications/{$trackingId}/certificate");
-            $approvedAt = $application->approved_at ? $application->approved_at->format('d M, Y') : date('d M, Y');
+        $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
+        $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
+        $trackingId = $application->tracking_id;
+        $certificateNo = $application->certificate_number ?? $application->license_number ?? $trackingId;
+        $certUrl = url("/applications/{$application->id}/certificate");
+        $approvedAt = $application->approved_at ? $application->approved_at->format('d/m/Y') : date('d/m/Y');
 
-            $subject = "🎉 অভিনন্দন! আপনার {$serviceName} অনুমোদিত হয়েছে - সনদ নং: {$certificateNo}";
+        $subject = "🎉 অভিনন্দন! আপনার {$serviceName} অনুমোদিত হয়েছে (সনদ নং: {$certificateNo})";
 
-            $html = <<<HTML
+        $html = <<<HTML
 <!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
 <style>
     body { font-family: 'SolaimanLipi', Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
-    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-    .header { background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 36px 24px; text-align: center; color: #ffffff; }
+    .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
     .header h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: bold; }
+    .header p { margin: 0; font-size: 13px; opacity: 0.95; }
     .content { padding: 32px 24px; }
-    .congrats { font-size: 18px; font-weight: bold; color: #047857; margin-bottom: 12px; }
-    .cert-box { background: #f0fdf4; border: 2px solid #34d399; border-radius: 12px; padding: 20px; margin: 24px 0; text-align: center; }
+    .congrats { font-size: 18px; font-weight: bold; color: #065f46; margin-bottom: 12px; }
+    .cert-box { background: #ecfdf5; border: 2px solid #34d399; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0; }
     .cert-label { font-size: 12px; color: #065f46; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
     .cert-no { font-size: 22px; font-weight: bold; color: #047857; font-family: monospace; }
     .details { background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 24px; font-size: 14px; }
@@ -264,17 +288,7 @@ HTML;
 </html>
 HTML;
 
-            Mail::html($html, function ($message) use ($email, $subject) {
-                $message->to($email)
-                        ->subject($subject);
-            });
-
-            Log::info("License approved email sent to: {$email}");
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("Failed to send license approved email: " . $e->getMessage());
-            return false;
-        }
+        return self::sendEmailDirect($email, $subject, $html);
     }
 
     /**
@@ -282,29 +296,28 @@ HTML;
      */
     public static function sendApplicationStatusNotification(Application $application, string $status, ?string $comment = null): bool
     {
-        try {
-            $user = $application->user;
-            $email = $user->email ?? $application->email ?? null;
-            if (!$email) return false;
+        $user = $application->user;
+        $email = $user->email ?? $application->email ?? null;
+        if (!$email) return false;
 
-            $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
-            $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
-            $trackingId = $application->tracking_id;
-            $trackUrl = url("/applications/track?tracking_id={$trackingId}");
+        $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
+        $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
+        $trackingId = $application->tracking_id;
+        $trackUrl = url("/applications/track?tracking_id={$trackingId}");
 
-            $statusTextMap = [
-                'under_review' => 'পর্যালোচনাধীন (Under Review)',
-                'info_required' => 'অতিরিক্ত তথ্য/কাগজ প্রয়োজন (Action Required)',
-                'rejected' => 'আবেদন বাতিল (Rejected)',
-                'completed' => 'নিষ্পত্তিকৃত (Completed)',
-            ];
-            $statusBangla = $statusTextMap[$status] ?? $status;
+        $statusTextMap = [
+            'under_review' => 'পর্যালোচনাধীন (Under Review)',
+            'info_required' => 'অতিরিক্ত তথ্য/কাগজ প্রয়োজন (Action Required)',
+            'rejected' => 'আবেদন বাতিল (Rejected)',
+            'completed' => 'নিষ্পত্তিকৃত (Completed)',
+        ];
+        $statusBangla = $statusTextMap[$status] ?? $status;
 
-            $subject = "আবেদনের অবস্থা আপডেট: {$serviceName} (ট্র্যাকিং: {$trackingId})";
+        $subject = "আবেদনের অবস্থা আপডেট: {$serviceName} (ট্র্যাকিং: {$trackingId})";
 
-            $commentHtml = $comment ? "<div style='background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #92400e; margin: 16px 0;'><strong>কর্মকর্তার মন্তব্য:</strong> {$comment}</div>" : '';
+        $commentHtml = $comment ? "<div style='background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #92400e; margin: 16px 0;'><strong>কর্মকর্তার মন্তব্য:</strong> {$comment}</div>" : '';
 
-            $html = <<<HTML
+        $html = <<<HTML
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -348,16 +361,6 @@ HTML;
 </html>
 HTML;
 
-            Mail::html($html, function ($message) use ($email, $subject) {
-                $message->to($email)
-                        ->subject($subject);
-            });
-
-            Log::info("Status update email sent to: {$email}");
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("Failed to send status update email: " . $e->getMessage());
-            return false;
-        }
+        return self::sendEmailDirect($email, $subject, $html);
     }
 }

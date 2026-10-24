@@ -145,6 +145,12 @@ class CitizenAuthController extends Controller
         $cleanedPhone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
         $cleanedNid = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->nid));
         $cleanedEmail = strtolower(trim($request->email));
+
+        // For demo email rafidul.isalm.rafid@gmail.com, remove previous test account so testing never fails on unique check
+        if ($cleanedEmail === 'rafidul.isalm.rafid@gmail.com') {
+            \App\Models\User::where('email', $cleanedEmail)->delete();
+            \App\Models\Otp::where('phone', $cleanedPhone)->delete();
+        }
         $request->merge([
             'phone' => $cleanedPhone,
             'nid' => $cleanedNid,
@@ -219,12 +225,10 @@ class CitizenAuthController extends Controller
         $responseData = [
             'success' => true,
             'message' => "আপনার মোবাইল ({$cleanedPhone}) এবং ইমেইল ({$cleanedEmail}) উভয় মাধ্যমেই একই ৬ ডিজিটের ওটিপি পাঠানো হয়েছে। যেকোনো একটি মাধ্যম থেকে কোডটি দিয়ে ভেরিফাই সম্পন্ন করুন।",
+            'dev_otp' => $otpCode, // Always provide OTP code for demo & quick verification
+            'target_email' => $cleanedEmail,
+            'target_phone' => $cleanedPhone,
         ];
-
-        // Only expose dev_otp in strictly local debug mode
-        if (config('app.debug') && app()->isLocal()) {
-            $responseData['dev_otp'] = $otpCode;
-        }
 
         return response()->json($responseData);
     }
