@@ -290,6 +290,14 @@ class ApplicationController extends Controller
 
             DB::commit();
 
+            // Dispatch confirmation email to applicant with tracking details
+            try {
+                \App\Services\EmailNotificationService::sendApplicationSubmittedNotification($application);
+            } catch (\Throwable $mailEx) {
+                \Illuminate\Support\Facades\Log::warning("Email notification error on application submit: " . $mailEx->getMessage());
+            }
+
+
             return redirect()->route('applications.show', $application->tracking_id)
                 ->with('success', 'আপনার আবেদনটি সফলভাবে দাখিল হয়েছে এবং দায়িত্বপ্রাপ্ত কর্মকর্তার কাছে প্রেরিত হয়েছে।')
                 ->with('tracking_id', $trackingId);

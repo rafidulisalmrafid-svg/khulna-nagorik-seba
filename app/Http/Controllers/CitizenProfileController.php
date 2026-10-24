@@ -372,6 +372,14 @@ class CitizenProfileController extends Controller
             'is_used' => false,
         ]);
 
+        // Dispatch OTP to citizen's new email address
+        \App\Services\EmailNotificationService::sendOtpNotification(
+            $request->new_email,
+            $user->name,
+            $otpCode,
+            $user->phone
+        );
+
         $responseData = [
             'success' => true,
             'message' => "আপনার নতুন ইমেইলে ({$request->new_email}) একটি ৬ ডিজিটের যাচাইকরণ কোড পাঠানো হয়েছে।",

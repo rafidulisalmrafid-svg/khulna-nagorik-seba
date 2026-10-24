@@ -3,15 +3,14 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Otp;
 use App\Models\User;
+use App\Models\Otp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class CitizenAuthController extends Controller
 {
@@ -23,134 +22,92 @@ class CitizenAuthController extends Controller
         return str_replace($bn, $en, $str);
     }
 
-
-    /**
-     * Check if phone number is registered.
-     */
     public function checkPhone(Request $request)
     {
         $request->validate([
             'phone' => 'required|string',
         ]);
 
-        $phone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
-        $user = User::where('phone', $phone)
-            ->orWhere('phone', $request->phone)
-            ->first();
+        $cleaned = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
+
+        $user = User::where('phone', $cleaned)->first();
 
         if ($user) {
             return response()->json([
                 'exists' => true,
                 'name' => $user->name,
-                'phone' => $user->phone,
-                'message' => 'অ্যাকাউন্ট বিদ্যমান। আপনার পাসওয়ার্ড দিয়ে প্রবেশ করুন।',
+                'role' => $user->role,
+                'message' => 'এই মোবাইল নম্বরে পূর্বে একটি অ্যাকাউন্ট নিবন্ধিত রয়েছে। অনুগ্রহ করে পাসওয়ার্ড দিয়ে প্রবেশ করুন।',
             ]);
         }
 
         return response()->json([
             'exists' => false,
-            'message' => 'এই নম্বরে কোনো অ্যাকাউন্ট নেই',
+            'message' => 'নতুন নাগরিক হিসেবে নিবন্ধন করুন।',
         ]);
     }
 
-    /**
-     * Authenticate citizen (by phone) or official/admin (by email) with Brute-Force lockout protection.
-     */
     public function login(Request $request)
     {
         $identifier = $request->email ?: $request->phone;
 
         $request->validate([
             'password' => 'required|string',
+            'redirect' => 'nullable|string',
         ], [
-            'password.required' => 'পাসওয়ার্ড দেওয়া আবশ্যক।',
+            'password.required' => 'পাসওয়ার্ড প্রদান করা আবশ্যক।',
         ]);
 
-        if (empty($identifier)) {
-            throw ValidationException::withMessages([
-                'phone' => 'মোবাইল নম্বর অথবা ইমেইল দেওয়া আবশ্যক।',
-                'email' => 'অফিসিয়াল ইমেইল দেওয়া আবশ্যক।',
-            ]);
+        $cleanedPhone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
+        $email = $request->filled('email') ? strtolower(trim($request->email)) : null;
+
+        $user = null;
+        if (!empty($cleanedPhone)) {
+            $user = User::where('phone', $cleanedPhone)->first();
+        }
+        if (!$user && !empty($email)) {
+            $user = User::where('email', $email)->first();
         }
 
-        // Anti-Brute Force Throttle Key (per identifier + IP)
-        $cleanIdentifier = strtolower(trim((string) $identifier));
-        $throttleKey = Str::transliterate($cleanIdentifier . '|' . $request->ip());
-
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'password' => "অতিরিক্ত ভুল চেষ্টার কারণে আপনার লগইন সাময়িকভাবে স্থগিত করা হয়েছে। অনুগ্রহ করে {$seconds} সেকেন্ড পর আবার চেষ্টা করুন।",
-            ]);
-        }
-
-        // Check if identifier is an email or phone
-        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-            $user = User::where('email', strtolower(trim($identifier)))->first();
-        } else {
-            $cleanPhone = preg_replace('/[^0-9]/', '', $identifier);
-            $user = User::where('phone', $cleanPhone)
-                ->orWhere('phone', $identifier)
-                ->first();
-        }
-
-        if (!$user) {
-            RateLimiter::hit($throttleKey, 60);
-            $errorField = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
-            throw ValidationException::withMessages([
-                $errorField => 'এই তথ্যে কোনো অ্যাকাউন্ট পাওয়া যায়নি।',
-            ]);
-        }
-
-        if (!Hash::check($request->password, $user->password)) {
-            RateLimiter::hit($throttleKey, 60);
-            $remaining = RateLimiter::remaining($throttleKey, 5);
-            $warning = $remaining > 0 
-                ? "ভুল পাসওয়ার্ড। আর {$remaining} বার চেষ্টার সুযোগ আছে।"
-                : "ভুল পাসওয়ার্ড। অ্যাকাউন্ট সাময়িকভাবে লক করা হয়েছে।";
-
-            throw ValidationException::withMessages([
-                'password' => $warning,
+                'phone' => ['মোবাইল নম্বর/ইমেইল অথবা পাসওয়ার্ড ভুল! অনুগ্রহ করে সঠিক তথ্য দিন।'],
             ]);
         }
 
         if (!$user->is_active) {
             throw ValidationException::withMessages([
-                'phone' => 'আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা আছে। হেল্পডেস্কে যোগাযোগ করুন।',
+                'phone' => ['আপনার অ্যাকাউন্টটি সাময়িকভাবে নিষ্ক্রিয় রয়েছে। খুলনা সিটি কর্পোরেশনের সহায়তায় যোগাযোগ করুন।'],
             ]);
         }
 
-        // Authentication Successful -> Clear Throttle Lock
-        RateLimiter::clear($throttleKey);
-
-        Auth::login($user, $request->boolean('remember'));
+        Auth::login($user, $request->boolean('remember', true));
         $request->session()->regenerate();
 
-        if ($request->filled('redirect')) {
-            return redirect($request->redirect);
+        $redirectUrl = $request->redirect;
+        if (!$redirectUrl) {
+            $redirectUrl = $user->isStaff() ? route('admin.dashboard') : route('citizen.dashboard');
         }
 
-        if ($user->isStaff()) {
-            return redirect()->intended(route('admin.dashboard'));
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'redirect_url' => $redirectUrl,
+            ]);
         }
 
-        return redirect()->intended(route('citizen.dashboard'));
+        return redirect()->intended($redirectUrl);
     }
 
     /**
-     * Send OTP for registration with detailed cascading address.
+     * Send Registration OTP to citizen's Email and Phone
      */
     public function sendRegisterOtp(Request $request)
     {
         $cleanedPhone = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->phone));
         $cleanedNid = preg_replace('/[^0-9]/', '', $this->normalizeBengaliDigits($request->nid));
-        $cleanedEmail = strtolower(trim($request->email));
+        $cleanedEmail = strtolower(trim((string) $request->email));
 
-        // For demo email rafidul.isalm.rafid@gmail.com, remove previous test account so testing never fails on unique check
-        if ($cleanedEmail === 'rafidul.isalm.rafid@gmail.com') {
-            \App\Models\User::where('email', $cleanedEmail)->delete();
-            \App\Models\Otp::where('phone', $cleanedPhone)->delete();
-        }
         $request->merge([
             'phone' => $cleanedPhone,
             'nid' => $cleanedNid,
@@ -173,16 +130,16 @@ class CitizenAuthController extends Controller
             'name.required' => 'নাগরিকের পুরো নাম দেওয়া আবশ্যক।',
             'phone.required' => 'মোবাইল নম্বর দেওয়া আবশ্যক।',
             'phone.digits' => 'মোবাইল নম্বর সঠিক ১১ ডিজিটের হতে হবে।',
-            'phone.unique' => 'এই মোবাইল নম্বরে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে।',
+            'phone.unique' => 'এই মোবাইল নম্বরে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে। অনুগ্রহ করে লগইন করুন।',
             'nid.required' => 'জাতীয় পরিচয়পত্র (NID) নম্বর দেওয়া আবশ্যক।',
             'nid.min' => 'NID নম্বর কমপক্ষে ১০ ডিজিট হতে হবে।',
             'nid.max' => 'NID নম্বর সর্বোচ্চ ১৭ ডিজিট হতে পারে।',
-            'nid.unique' => 'এই NID নম্বরে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে।',
+            'nid.unique' => 'এই NID নম্বরে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে। অনুগ্রহ করে লগইন করুন।',
             'password.required' => 'পাসওয়ার্ড নির্ধারণ করা আবশ্যক।',
             'password.min' => 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।',
             'email.required' => 'ইমেইল ঠিকানা প্রদান করা আবশ্যক।',
-            'email.email' => 'সঠিক ইমেইল ঠিকানা প্রদান করুন।',
-            'email.unique' => 'এই ইমেইল দিয়ে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে।',
+            'email.email' => 'সঠিক ইমেইল ঠিকানা প্রদান করুন (যেমন: name@example.com)।',
+            'email.unique' => 'এই ইমেইল দিয়ে ইতোমধ্যে একটি অ্যাকাউন্ট রয়েছে। অনুগ্রহ করে লগইন করুন।',
             'district.required' => 'জেলা নির্বাচন করা আবশ্যক।',
             'upazila.required' => 'উপজেলা বা থানা নির্বাচন করা আবশ্যক।',
             'union_ward.required' => 'ওয়ার্ড বা ইউনিয়ন পরিষদ নির্বাচন করা আবশ্যক।',
@@ -190,10 +147,12 @@ class CitizenAuthController extends Controller
 
         $otpCode = (string) mt_rand(100000, 999999);
 
-        // Delete previous unverified register OTPs for this phone or email
-        Otp::where('phone', $cleanedPhone)
-            ->where('action', 'register')
-            ->delete();
+        // Delete any unverified previous registration OTP for this phone or email
+        Otp::where('action', 'register')
+            ->where(function ($q) use ($cleanedPhone, $cleanedEmail) {
+                $q->where('phone', $cleanedPhone)
+                  ->orWhere('payload->email', $cleanedEmail);
+            })->delete();
 
         Otp::create([
             'phone' => $cleanedPhone,
@@ -217,18 +176,28 @@ class CitizenAuthController extends Controller
         ]);
 
         // 1. Dispatch OTP directly to citizen's Email via Gmail SMTP
-        \App\Services\EmailNotificationService::sendOtpNotification($cleanedEmail, $request->name, $otpCode, $cleanedPhone);
+        $emailSent = \App\Services\EmailNotificationService::sendOtpNotification(
+            $cleanedEmail,
+            $request->name,
+            $otpCode,
+            $cleanedPhone
+        );
 
-        // 2. Dispatch OTP to citizen's Mobile Phone SMS (Simulated / Gateway logging)
-        \Illuminate\Support\Facades\Log::info("Dual OTP dispatched to Phone [{$cleanedPhone}] and Email [{$cleanedEmail}]: {$otpCode}");
+        // 2. Dispatch OTP to citizen's Mobile Phone SMS (Simulated gateway logging)
+        \Illuminate\Support\Facades\Log::info("Dual OTP dispatched to Phone [{$cleanedPhone}] and Email [{$cleanedEmail}]: {$otpCode} (Email sent: " . ($emailSent ? 'YES' : 'NO') . ")");
 
         $responseData = [
             'success' => true,
-            'message' => "আপনার মোবাইল ({$cleanedPhone}) এবং ইমেইল ({$cleanedEmail}) উভয় মাধ্যমেই একই ৬ ডিজিটের ওটিপি পাঠানো হয়েছে। যেকোনো একটি মাধ্যম থেকে কোডটি দিয়ে ভেরিফাই সম্পন্ন করুন।",
-            'dev_otp' => $otpCode, // Always provide OTP code for demo & quick verification
+            'email_sent' => $emailSent,
+            'message' => "আপনার ইমেইল ({$cleanedEmail}) এবং মোবাইল ({$cleanedPhone})-এ ৬ ডিজিটের ওটিপি ভেরিফিকেশন কোড পাঠানো হয়েছে। ইমেইলের ইনবক্স বা স্প্যাম ফোল্ডার চেক করে কোডটি দিয়ে ভেরিফাই সম্পন্ন করুন।",
             'target_email' => $cleanedEmail,
             'target_phone' => $cleanedPhone,
         ];
+
+        // Developer test helper: only in strictly local dev mode
+        if (config('app.debug') && app()->isLocal()) {
+            $responseData['dev_otp'] = $otpCode;
+        }
 
         return response()->json($responseData);
     }
@@ -279,7 +248,7 @@ class CitizenAuthController extends Controller
         if (!$otp || !$otp->isValid($cleanedOtp)) {
             return response()->json([
                 'success' => false,
-                'message' => 'ভুল অথবা মেয়াদোত্তীর্ণ ওটিপি কোড! অনুগ্রহ করে আপনার মোবাইল বা ইমেইলে প্রাপ্ত সঠিক কোডটি দিন।',
+                'message' => 'ভুল অথবা মেয়াদোত্তীর্ণ ওটিপি কোড! অনুগ্রহ করে আপনার ইমেইল বা মোবাইলে প্রাপ্ত সঠিক কোডটি দিন।',
             ], 422);
         }
 
@@ -333,7 +302,7 @@ class CitizenAuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        $redirectUrl = $request->redirect ?: route('home');
+        $redirectUrl = $request->redirect ?: route('citizen.dashboard');
 
         return response()->json([
             'success' => true,

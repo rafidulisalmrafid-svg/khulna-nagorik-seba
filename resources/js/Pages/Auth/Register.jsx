@@ -58,6 +58,7 @@ export default function Register({ initialPhone = '', redirect = '' }) {
     const [otpError, setOtpError] = useState('');
     const [timer, setTimer] = useState(60);
     const [canResend, setCanResend] = useState(false);
+    const [resendSuccess, setResendSuccess] = useState('');
 
     // Resend countdown timer
     useEffect(() => {
@@ -188,6 +189,7 @@ export default function Register({ initialPhone = '', redirect = '' }) {
                 ...formData,
                 phone: bnToEnNumber(formData.phone).replace(/[^0-9]/g, ''),
                 nid: bnToEnNumber(formData.nid).replace(/[^0-9]/g, ''),
+                email: formData.email ? formData.email.trim().toLowerCase() : '',
             };
             const res = await axios.post('/auth/send-register-otp', payload);
             if (res.data.success) {
@@ -262,6 +264,7 @@ export default function Register({ initialPhone = '', redirect = '' }) {
                 ...formData,
                 phone: bnToEnNumber(formData.phone).replace(/[^0-9]/g, ''),
                 nid: bnToEnNumber(formData.nid).replace(/[^0-9]/g, ''),
+                email: formData.email ? formData.email.trim().toLowerCase() : '',
             };
             const res = await axios.post('/auth/send-register-otp', payload);
             if (res.data.success) {
@@ -425,7 +428,7 @@ export default function Register({ initialPhone = '', redirect = '' }) {
                                 title="টেস্টিংয়ের জন্য ডেমো তথ্য স্বয়ংক্রিয়ভাবে পূরণ করুন"
                             >
                                 <Sparkles className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                                <span>ডেমো ডাটা পূরণ (rafidul.isalm.rafid@gmail.com)</span>
+                                <span>টেস্টিং ডেমো পূরণ</span>
                             </button>
                         </div>
                     </div>
@@ -825,6 +828,13 @@ export default function Register({ initialPhone = '', redirect = '' }) {
                             </p>
                         )}
                     </div>
+
+                                        {resendSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>{resendSuccess}</span>
+                        </div>
+                    )}
 
                     {/* Resend Countdown */}
                     <div className="text-center">

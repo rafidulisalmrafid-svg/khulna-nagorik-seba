@@ -490,6 +490,18 @@ class AdminDashboardController extends Controller
             ],
         ]);
 
+        // Dispatch email notification to citizen based on status change
+        try {
+            if ($newStatus === 'approved') {
+                \App\Services\EmailNotificationService::sendLicenseApprovedNotification($application);
+            } else {
+                \App\Services\EmailNotificationService::sendApplicationStatusNotification($application, $newStatus, $request->comment);
+            }
+        } catch (\Throwable $mailEx) {
+            \Illuminate\Support\Facades\Log::warning("Email notification error on application status change: " . $mailEx->getMessage());
+        }
+
+
         return back()->with('success', 'আবেদনের স্থিতি ও সংশোধনের নির্দেশনা সফলভাবে পাঠানো হয়েছে।');
     }
 
@@ -1169,6 +1181,15 @@ class AdminDashboardController extends Controller
             'ip_address' => $request->ip(),
             'details' => ['status' => $request->status, 'comment' => $request->comment],
         ]);
+
+        if (!empty($complaint->citizen_email)) {
+            try {
+                \App\Services\EmailNotificationService::sendComplaintStatusNotification($complaint, $request->status, $request->comment);
+            } catch (\Throwable $mailEx) {
+                \Illuminate\Support\Facades\Log::warning("Email notification error on complaint status change: " . $mailEx->getMessage());
+            }
+        }
+
 
         return back()->with('success', 'অভিযোগের স্ট্যাটাস সফলভাবে আপডেট করা হয়েছে।');
     }

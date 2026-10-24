@@ -104,6 +104,15 @@ class ComplaintController extends Controller
                 'details' => ['tracking_id' => $trackingId, 'category' => $request->category],
             ]);
 
+            if (!empty($complaint->citizen_email)) {
+                try {
+                    \App\Services\EmailNotificationService::sendComplaintNotification($complaint);
+                } catch (\Throwable $mailEx) {
+                    \Illuminate\Support\Facades\Log::warning("Email notification error on complaint create: " . $mailEx->getMessage());
+                }
+            }
+
+
             DB::commit();
 
             return redirect()->route('complaints.track', ['tracking_id' => $trackingId])

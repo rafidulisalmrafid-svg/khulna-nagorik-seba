@@ -18,11 +18,20 @@ class EmailNotificationService
      */
     public static function sendEmailDirect(string $toEmail, string $subject, string $htmlContent): bool
     {
+        $toEmail = strtolower(trim($toEmail));
+        if (empty($toEmail) || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+            Log::warning("EmailNotificationService: Invalid recipient email rejected: '{$toEmail}'");
+            return false;
+        }
+
+        $fromAddress = config('mail.from.address', 'rafidul.labar.bd@gmail.com');
+        $fromName = config('mail.from.name', 'খুলনা সেবা');
+
         // 1. First Attempt: Standard Laravel Mailer
         try {
-            Mail::html($htmlContent, function ($message) use ($toEmail, $subject) {
+            Mail::html($htmlContent, function ($message) use ($toEmail, $subject, $fromAddress, $fromName) {
                 $message->to($toEmail)
-                        ->from('rafidul.labar.bd@gmail.com', 'খুলনা সেবা')
+                        ->from($fromAddress, $fromName)
                         ->subject($subject);
             });
             Log::info("Email successfully sent via Laravel Mailer to: {$toEmail}");
@@ -68,13 +77,13 @@ class EmailNotificationService
     }
 
     /**
-     * Send OTP Verification Email to Citizen for Register / Login
+     * Send OTP Verification Email to Citizen for Register / Login / Verification
      */
     public static function sendOtpNotification(string $email, string $name, string $otp, ?string $phone = null): bool
     {
-        $subject = "খুলনা সেবা - আপনার ওটিপি (OTP) কোড: {$otp}";
+        $subject = "খুলনা সেবা - আপনার ওটিপি (OTP) ভেরিফিকেশন কোড: {$otp}";
         
-        $phoneNote = $phone ? "<p style='margin: 8px 0; color: #065f46; font-size: 13px; background: #e6fcf5; padding: 8px 12px; border-radius: 8px;'>📱 এই একই ওটিপি কোডটি আপনার মোবাইল নম্বর <strong>{$phone}</strong>-এও পাঠানো হয়েছে।</p>" : "";
+        $phoneNote = $phone ? "<p style='margin: 8px 0; color: #065f46; font-size: 13px; background: #e6fcf5; padding: 10px 14px; border-radius: 8px;'>📱 এই একই ওটিপি কোডটি আপনার মোবাইল নম্বর <strong>{$phone}</strong>-এও পাঠানো হয়েছে।</p>" : "";
 
         $html = <<<HTML
 <!DOCTYPE html>
@@ -93,7 +102,7 @@ class EmailNotificationService
     .otp-box { background: #f0fdf4; border: 2px dashed #10b981; border-radius: 12px; padding: 24px; text-align: center; margin: 20px 0; }
     .otp-label { font-size: 12px; color: #047857; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
     .otp-code { font-size: 38px; font-weight: 800; color: #065f46; letter-spacing: 8px; font-family: monospace; }
-    .dual-note { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #1e40af; line-height: 1.6; margin: 20px 0; }
+    .dual-note { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #1e40af; line-height: 1.6; margin: 20px 0; }
     .warning { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; font-size: 12px; color: #92400e; line-height: 1.5; margin-top: 20px; }
     .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
 </style>
@@ -142,7 +151,7 @@ HTML;
     public static function sendApplicationSubmittedNotification(Application $application): bool
     {
         $user = $application->user;
-        $email = $user->email ?? $application->email ?? null;
+        $email = $application->applicant_email ?: ($user->email ?? null);
         if (!$email) return false;
 
         $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
@@ -182,7 +191,7 @@ HTML;
     <div class="content">
         <div class="greeting">সম্মানিত {$applicantName},</div>
         <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            খুলনা সেবা পোর্টালে আপনার <strong>{$serviceName}</strong>-এর আবেদনটি সফলভাবে গৃহীত হয়েছে। কর্তৃপক্ষ শীঘ্রই আপনার আবেদনটি পর্যালোচনা করবে।
+            খুলনা সেবা পোর্টালে আপনার <strong>{$serviceName}</strong>-এর আবেদনটি সফলভাবে গৃহীত হয়েছে। সংশ্লিষ্ট দায়িত্বপ্রাপ্ত কর্মকর্তা শীঘ্রই আপনার আবেদনটি পর্যালোচনা করবেন।
         </p>
 
         <div class="tracking-box">
@@ -200,7 +209,7 @@ HTML;
         </div>
     </div>
     <div class="footer">
-        © খুলনা সিটি কর্পোরেশন • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
+        © খুলনা সিটি কর্পোরেশন • নাগরিক সেবা বিভাগ • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
     </div>
 </div>
 </body>
@@ -216,17 +225,16 @@ HTML;
     public static function sendLicenseApprovedNotification(Application $application): bool
     {
         $user = $application->user;
-        $email = $user->email ?? $application->email ?? null;
+        $email = $application->applicant_email ?: ($user->email ?? null);
         if (!$email) return false;
 
         $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
         $serviceName = $application->service->name_bn ?? 'নাগরিক সেবা';
         $trackingId = $application->tracking_id;
-        $certificateNo = $application->certificate_number ?? $application->license_number ?? $trackingId;
-        $certUrl = url("/applications/{$application->id}/certificate");
-        $approvedAt = $application->approved_at ? $application->approved_at->format('d/m/Y') : date('d/m/Y');
+        $certNo = $application->certificate_number ?: ('CERT-' . date('Y') . '-' . mt_rand(100000, 999999));
+        $certUrl = url("/applications/certificate/{$trackingId}");
 
-        $subject = "🎉 অভিনন্দন! আপনার {$serviceName} অনুমোদিত হয়েছে (সনদ নং: {$certificateNo})";
+        $subject = "খুলনা সেবা - আপনার আবেদনটি অনুমোদিত হয়েছে: {$serviceName} (সনদ নং: {$certNo})";
 
         $html = <<<HTML
 <!DOCTYPE html>
@@ -236,16 +244,16 @@ HTML;
 <style>
     body { font-family: 'SolaimanLipi', Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
     .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-    .header { background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
     .header h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: bold; }
-    .header p { margin: 0; font-size: 13px; opacity: 0.95; }
+    .header p { margin: 0; font-size: 13px; opacity: 0.9; }
     .content { padding: 32px 24px; }
-    .congrats { font-size: 18px; font-weight: bold; color: #065f46; margin-bottom: 12px; }
-    .cert-box { background: #ecfdf5; border: 2px solid #34d399; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0; }
-    .cert-label { font-size: 12px; color: #065f46; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
-    .cert-no { font-size: 22px; font-weight: bold; color: #047857; font-family: monospace; }
-    .details { background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 24px; font-size: 14px; }
-    .btn { display: inline-block; background: #059669; color: #ffffff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3); }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #0f172a; }
+    .success-badge { background: #dcfce7; color: #166534; font-weight: bold; padding: 8px 16px; border-radius: 20px; display: inline-block; font-size: 13px; margin-bottom: 16px; }
+    .cert-box { background: #f8fafc; border: 2px dashed #94a3b8; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; }
+    .cert-label { font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
+    .cert-no { font-size: 22px; font-weight: bold; color: #1e293b; font-family: monospace; letter-spacing: 1px; }
+    .btn { display: inline-block; background: #2563eb; color: #ffffff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: bold; font-size: 15px; text-align: center; box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
     .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
 </style>
 </head>
@@ -253,35 +261,33 @@ HTML;
 <div class="container">
     <div class="header">
         <h1>খুলনা সিটি কর্পোরেশন</h1>
-        <p>লাইসেন্স ও ডিজিটাল সনদ অনুমোদন বিজ্ঞপ্তি</p>
+        <p>অনুমোদিত সেবা সনদ ও লাইসেন্স বিতরণ</p>
     </div>
     <div class="content">
-        <div class="congrats">🎉 অভিনন্দন, {$applicantName}!</div>
-        <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            খুলনা সিটি কর্পোরেশন কর্তৃপক্ষ কর্তৃক আপনার <strong>{$serviceName}</strong>-এর আবেদনটি সফলভাবে <strong>অনুমোদিত</strong> করা হয়েছে এবং আপনার ডিজিটাল সনদ প্রস্তুত হয়েছে।
+        <div style="text-align: center;">
+            <div class="success-badge">✓ আবেদন চূড়ান্ত অনুমোদন সম্পন্ন</div>
+        </div>
+        <div class="greeting">অভিনন্দন {$applicantName},</div>
+        <p style="font-size: 14px; line-height: 1.7; color: #475569;">
+            খুলনা সেবা পোর্টালে আপনার <strong>{$serviceName}</strong>-এর আবেদনটি সফলভাবে যাচাই-বাছাই শেষে চূড়ান্তভাবে অনুমোদিত হয়েছে।
         </p>
 
         <div class="cert-box">
-            <div class="cert-label">অফিসিয়াল সনদ / লাইসেন্স নম্বর</div>
-            <div class="cert-no">{$certificateNo}</div>
+            <div class="cert-label">ইস্যুকৃত সনদ / লাইসেন্স নম্বর</div>
+            <div class="cert-no">{$certNo}</div>
+            <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">আবেদন ট্র্যাকিং নম্বর: <strong>{$trackingId}</strong></p>
         </div>
 
-        <div class="details">
-            <p style="margin: 6px 0;"><strong>সেবা:</strong> {$serviceName}</p>
-            <p style="margin: 6px 0;"><strong>ট্র্যাকিং নম্বর:</strong> {$trackingId}</p>
-            <p style="margin: 6px 0;"><strong>অনুমোদনের তারিখ:</strong> {$approvedAt}</p>
-        </div>
+        <p style="font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 24px;">
+            নিচের লিঙ্কে ক্লিক করে আপনি যেকোনো সময় আপনার ডিজিটাল সনদপত্র বা লাইসেন্স দেখতে এবং সরাসরি পিডিএফ প্রিন্ট/ডাউনলোড করতে পারবেন।
+        </p>
 
         <div style="text-align: center; margin: 28px 0;">
-            <a href="{$certUrl}" class="btn">ডিজিটাল সনদ দেখুন ও ডাউনলোড করুন 📥</a>
+            <a href="{$certUrl}" class="btn">সনদপত্র ডাউনলোড করুন 🖨️</a>
         </div>
-
-        <p style="font-size: 13px; color: #64748b; line-height: 1.5; text-align: center;">
-            এই সনদটি কিউআর কোড (QR Code) যুক্ত সরকারি ডিজিটাল সনদ। আপনি সরাসরি প্রিন্ট করে সকল অফিসিয়াল কাজে ব্যবহার করতে পারবেন।
-        </p>
     </div>
     <div class="footer">
-        © খুলনা সিটি কর্পোরেশন • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
+        © খুলনা সিটি কর্পোরেশন • নাগরিক সেবা বিভাগ • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
     </div>
 </div>
 </body>
@@ -292,12 +298,12 @@ HTML;
     }
 
     /**
-     * Send Application Status Update Notification Email
+     * Send Application Status Update Notification (under_review, info_required, rejected)
      */
     public static function sendApplicationStatusNotification(Application $application, string $status, ?string $comment = null): bool
     {
         $user = $application->user;
-        $email = $user->email ?? $application->email ?? null;
+        $email = $application->applicant_email ?: ($user->email ?? null);
         if (!$email) return false;
 
         $applicantName = $application->applicant_name ?: ($user->name ?? 'নাগরিক');
@@ -305,17 +311,17 @@ HTML;
         $trackingId = $application->tracking_id;
         $trackUrl = url("/applications/track?tracking_id={$trackingId}");
 
-        $statusTextMap = [
-            'under_review' => 'পর্যালোচনাধীন (Under Review)',
-            'info_required' => 'অতিরিক্ত তথ্য/কাগজ প্রয়োজন (Action Required)',
-            'rejected' => 'আবেদন বাতিল (Rejected)',
-            'completed' => 'নিষ্পত্তিকৃত (Completed)',
-        ];
-        $statusBangla = $statusTextMap[$status] ?? $status;
+        $statusText = match ($status) {
+            'under_review' => 'পর্যালোচনা শুরু হয়েছে',
+            'info_required' => 'নথি বা তথ্য সংশোধনের নির্দেশ',
+            'rejected' => 'আবেদন বাতিল করা হয়েছে',
+            'completed' => 'সেবা সম্পন্ন হয়েছে',
+            default => 'আবেদনের স্থিতি পরিবর্তন',
+        };
 
-        $subject = "আবেদনের অবস্থা আপডেট: {$serviceName} (ট্র্যাকিং: {$trackingId})";
+        $subject = "খুলনা সেবা - আবেদনের স্থিতি আপডেট: {$serviceName} [{$statusText}]";
 
-        $commentHtml = $comment ? "<div style='background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #92400e; margin: 16px 0;'><strong>কর্মকর্তার মন্তব্য:</strong> {$comment}</div>" : '';
+        $commentBox = $comment ? "<div style='background: #fffbeb; border-left: 4px solid #f59e0b; padding: 14px 18px; border-radius: 8px; margin: 18px 0; font-size: 13px; color: #92400e; line-height: 1.6;'><strong>কর্মকর্তার মন্তব্য:</strong><br>{$comment}</div>" : "";
 
         $html = <<<HTML
 <!DOCTYPE html>
@@ -325,36 +331,174 @@ HTML;
 <style>
     body { font-family: 'SolaimanLipi', Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
     .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-    .header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 30px 24px; text-align: center; color: #ffffff; }
+    .header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: bold; }
+    .header p { margin: 0; font-size: 13px; opacity: 0.9; }
     .content { padding: 32px 24px; }
-    .btn { display: inline-block; background: #0284c7; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; font-size: 14px; text-align: center; margin-top: 16px; }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #0f172a; }
+    .btn { display: inline-block; background: #0284c7; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; font-size: 14px; text-align: center; }
     .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
 </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1 style="margin: 0; font-size: 22px;">খুলনা সিটি কর্পোরেশন</h1>
-        <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">আবেদন অবস্থা পরিবর্তন বিজ্ঞপ্তি</p>
+        <h1>খুলনা সিটি কর্পোরেশন</h1>
+        <p>আবেদন অগ্রগতি ও স্থিতি পরিবর্তন নোটিফিকেশন</p>
     </div>
     <div class="content">
-        <div style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">সম্মানিত {$applicantName},</div>
+        <div class="greeting">সম্মানিত {$applicantName},</div>
         <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            আপনার <strong>{$serviceName}</strong> (ট্র্যাকিং: <code>{$trackingId}</code>) আবেদনের বর্তমান অবস্থা আপডেট করা হয়েছে।
+            খুলনা সেবা পোর্টালে দাখিলকৃত আপনার <strong>{$serviceName}</strong> (ট্র্যাকিং: <code>{$trackingId}</code>) আবেদনটির বর্তমান অবস্থা: <strong>{$statusText}</strong>।
         </p>
 
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 16px 0;">
-            <p style="margin: 6px 0; font-size: 14px;"><strong>বর্তমান অবস্থা:</strong> <span style="color: #0284c7; font-weight: bold;">{$statusBangla}</span></p>
-        </div>
-
-        {$commentHtml}
+        {$commentBox}
 
         <div style="text-align: center; margin-top: 24px;">
             <a href="{$trackUrl}" class="btn">আবেদনের বিস্তারিত ও ট্র্যাকিং দেখুন →</a>
         </div>
     </div>
     <div class="footer">
-        © খুলনা সিটি কর্পোরেশন • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
+        © খুলনা সিটি কর্পোরেশন • নাগরিক সেবা বিভাগ • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
+    </div>
+</div>
+</body>
+</html>
+HTML;
+
+        return self::sendEmailDirect($email, $subject, $html);
+    }
+
+    /**
+     * Send Complaint Submitted Notification Email
+     */
+    public static function sendComplaintNotification(Complaint $complaint): bool
+    {
+        $email = $complaint->citizen_email;
+        if (!$email) return false;
+
+        $citizenName = $complaint->citizen_name ?: 'নাগরিক';
+        $trackingId = $complaint->tracking_id;
+        $trackUrl = url("/complaints/track?tracking_id={$trackingId}");
+        $createdAt = $complaint->created_at ? $complaint->created_at->format('d/m/Y h:i A') : date('d/m/Y');
+
+        $subject = "খুলনা সেবা - নাগরিক অভিযোগ গৃহীত হয়েছে (ট্র্যাকিং: {$trackingId})";
+
+        $html = <<<HTML
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: 'SolaimanLipi', Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
+    .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: bold; }
+    .header p { margin: 0; font-size: 13px; opacity: 0.9; }
+    .content { padding: 32px 24px; }
+    .tracking-box { background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0; }
+    .tracking-id { font-size: 24px; font-weight: bold; color: #991b1b; font-family: monospace; letter-spacing: 2px; }
+    .btn { display: inline-block; background: #dc2626; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; font-size: 14px; text-align: center; }
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>খুলনা সিটি কর্পোরেশন</h1>
+        <p>নাগরিক অভিযোগ ও প্রতিকার সেল</p>
+    </div>
+    <div class="content">
+        <p style="font-size: 15px; font-weight: 600; color: #0f172a;">সম্মানিত {$citizenName},</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+            খুলনা সিটি কর্পোরেশন অভিযোগ পোর্টালে আপনার অভিযোগটি সফলভাবে নিবন্ধিত হয়েছে। সংশ্লিষ্ট তদন্তকারী কর্মকর্তা বিষয়টি গুরুত্বের সাথে পর্যবেক্ষণ করছেন।
+        </p>
+
+        <div class="tracking-box">
+            <div style="font-size: 12px; color: #991b1b; font-weight: bold; margin-bottom: 6px;">অভিযোগ ট্র্যাকিং নম্বর</div>
+            <div class="tracking-id">{$trackingId}</div>
+        </div>
+
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 24px;">
+            দাখিলের তারিখ: <strong>{$createdAt}</strong><br>
+            অবস্থান: <strong>{$complaint->location_landmark}</strong> (ওয়ার্ড নং: {$complaint->ward_no})
+        </p>
+
+        <div style="text-align: center; margin: 24px 0;">
+            <a href="{$trackUrl}" class="btn">অভিযোগের অবস্থা ট্র্যাক করুন →</a>
+        </div>
+    </div>
+    <div class="footer">
+        © খুলনা সিটি কর্পোরেশন • নাগরিক সেবা বিভাগ • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
+    </div>
+</div>
+</body>
+</html>
+HTML;
+
+        return self::sendEmailDirect($email, $subject, $html);
+    }
+
+    /**
+     * Send Complaint Status Update Notification
+     */
+    public static function sendComplaintStatusNotification(Complaint $complaint, string $status, ?string $comment = null): bool
+    {
+        $email = $complaint->citizen_email;
+        if (!$email) return false;
+
+        $citizenName = $complaint->citizen_name ?: 'নাগরিক';
+        $trackingId = $complaint->tracking_id;
+        $trackUrl = url("/complaints/track?tracking_id={$trackingId}");
+
+        $statusText = match ($status) {
+            'assigned' => 'দায়িত্বপ্রাপ্ত বিভাগে প্রেরণ',
+            'under_investigation' => 'তদন্ত প্রক্রিয়াধীন',
+            'action_in_progress' => 'সমাধান কার্যক্রম চলমান',
+            'resolved' => 'অভিযোগ নিষ্পত্তি সম্পন্ন',
+            'rejected' => 'অভিযোগ বাতিল করা হয়েছে',
+            default => 'স্ট্যাটাস আপডেট',
+        };
+
+        $subject = "খুলনা সেবা - অভিযোগের সর্বশেষ অবস্থা: [{$statusText}] (ট্র্যাকিং: {$trackingId})";
+
+        $commentBox = $comment ? "<div style='background: #f8fafc; border-left: 4px solid #64748b; padding: 14px 18px; border-radius: 8px; margin: 18px 0; font-size: 13px; color: #334155; line-height: 1.6;'><strong>দায়িত্বপ্রাপ্ত কর্মকর্তার মন্তব্য:</strong><br>{$comment}</div>" : "";
+
+        $html = <<<HTML
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: 'SolaimanLipi', Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
+    .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #1e293b 0%, #475569 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: bold; }
+    .content { padding: 32px 24px; }
+    .btn { display: inline-block; background: #0f766e; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; font-size: 14px; text-align: center; }
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>খুলনা সিটি কর্পোরেশন</h1>
+        <p>অভিযোগ প্রতিকার সেল নোটিফিকেশন</p>
+    </div>
+    <div class="content">
+        <p style="font-size: 15px; font-weight: 600; color: #0f172a;">সম্মানিত {$citizenName},</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+            আপনার দাখিলকৃত অভিযোগ (ট্র্যাকিং: <code>{$trackingId}</code>)-এর অগ্রগতি: <strong>{$statusText}</strong>।
+        </p>
+
+        {$commentBox}
+
+        <div style="text-align: center; margin-top: 24px;">
+            <a href="{$trackUrl}" class="btn">অভিযোগের পূর্ণাঙ্গ অগ্রগতি দেখুন →</a>
+        </div>
+    </div>
+    <div class="footer">
+        © খুলনা সিটি কর্পোরেশন • নাগরিক সেবা বিভাগ • সর্বস্বত্ব সংরক্ষিত • হেল্পলাইন: ১৬১৫২
     </div>
 </div>
 </body>
